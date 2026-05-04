@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Tienda</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont;
+  background: #0f0f0f;
+  color: white;
+}
+
+/* TITULO */
+h1 {
+  text-align: center;
+  animation: fadeDown 0.6s ease;
+}
+
+/* GRID */
+#productos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 10px;
+}
+
+/* CARDS */
+.card {
+  background: #1c1c1c;
+  border-radius: 15px;
+  padding: 8px;
+  text-align: center;
+  animation: fadeUp 0.4s ease;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:active {
+  transform: scale(0.95);
+}
+
+.card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 15px rgba(0,0,0,0.5);
+}
+
+.card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+  transition: transform 0.3s;
+}
+
+.card img:hover {
+  transform: scale(1.05);
+}
+
+/* BOTÓN */
+#adminBtn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #00c3ff;
+  border: none;
+  padding: 15px;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+#adminBtn:active {
+  transform: scale(0.9);
+}
+
+/* PANEL */
+#panel {
+  display: none;
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  background: #222;
+  padding: 15px;
+  border-radius: 15px;
+  width: 220px;
+  animation: fadeUp 0.3s ease;
+}
+
+/* INPUT */
+input {
+  width: 100%;
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+}
+
+/* MODAL */
+#modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.95);
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+  animation: fadeIn 0.3s;
+}
+
+#modal img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 12px;
+  transition: transform 0.3s;
+}
+
+#closeBtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 22px;
+  background: red;
+  border: none;
+  border-radius: 50%;
+  padding: 5px 10px;
+}
+
+/* ANIMACIONES */
+@keyframes fadeUp {
+  from {opacity:0; transform:translateY(20px);}
+  to {opacity:1;}
+}
+
+@keyframes fadeDown {
+  from {opacity:0; transform:translateY(-20px);}
+  to {opacity:1;}
+}
+
+@keyframes fadeIn {
+  from {opacity:0;}
+  to {opacity:1;}
+}
+</style>
+</head>
+
+<body>
+
+<h1>🛍️ Mi Tienda</h1>
+<div id="productos"></div>
+
+<button id="adminBtn">🔐</button>
+
+<div id="panel">
+  <div id="loginBox">
+    <input id="user" placeholder="Usuario">
+    <input id="pass" type="password" placeholder="Contraseña">
+    <button onclick="login()">Entrar</button>
+  </div>
+
+  <div id="adminContent" style="display:none;">
+    <button onclick="logout()">Cerrar sesión 🚪</button>
+    <input id="name" placeholder="Nombre">
+    <input id="price" placeholder="Precio">
+    <input type="file" id="imageInput">
+    <img id="preview" width="100">
+    <button onclick="guardar()">Guardar</button>
+  </div>
+</div>
+
+<div id="modal">
+  <button id="closeBtn">❌</button>
+  <img id="imgZoom">
+</div>
+
+<script>
+const URL="http://localhost:3000/products";
+
+let user="", pass="", editId=null, imagenBase64="";
+let images=[], currentIndex=0;
+
+// PANEL
+adminBtn.onclick=()=>panel.style.display=panel.style.display==="block"?"none":"block";
+
+// LOGIN
+async function login(){
+  user=userInput.value;
+  pass=passInput.value;
+
+  const res=await fetch("http://localhost:3000/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({user,pass})
+  });
+
+  if(res.ok){
+    loginBox.style.display="none";
+    adminContent.style.display="block";
+    cargar();
+  } else alert("Error login");
+}
+
+// LOGOUT
+function logout(){
+  user=""; pass="";
+  loginBox.style.display="block";
+  adminContent.style.display="none";
+  panel.style.display="none";
+  cargar();
+}
+
+// OPTIMIZAR IMAGEN (clave 🔥)
+imageInput.onchange=function(){
+  const file=this.files[0];
+  if(!file) return;
+
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.src=e.target.result;
+
+    img.onload=()=>{
+      const canvas=document.createElement("canvas");
+      const ctx=canvas.getContext("2d");
+
+      const MAX=600;
+      let w=img.width, h=img.height;
+
+      if(w>h && w>MAX){h*=MAX/w; w=MAX;}
+      else if(h>MAX){w*=MAX/h; h=MAX;}
+
+      canvas.width=w;
+      canvas.height=h;
+      ctx.drawImage(img,0,0,w,h);
+
+      imagenBase64=canvas.toDataURL("image/jpeg",0.7); // COMPRESIÓN
+      preview.src=imagenBase64;
+    };
+  };
+  reader.readAsDataURL(file);
+};
+
+// CARGAR
+async function cargar(){
+  const res=await fetch(URL);
+  const data=await res.json();
+
+  images=data.map(p=>p.image);
+  productos.innerHTML="";
+
+  data.forEach((p,i)=>{
+    productos.innerHTML+=`
+    <div class="card">
+      <img src="${p.image}" onclick="openModal(${i})">
+      <h4>${p.name}</h4>
+      <p>COP $ ${new Intl.NumberFormat("es-CO").format(p.price)}</p>
+
+      ${user?`
+      <button onclick="editar('${p._id}','${p.name}',${p.price},'${p.image}')">✏️</button>
+      <button onclick="eliminar('${p._id}')">❌</button>`:""}
+    </div>`;
+  });
+}
+
+// MODAL
+function openModal(i){
+  currentIndex=i;
+  modal.style.display="flex";
+  imgZoom.src=images[i];
+}
+
+closeBtn.onclick=()=>modal.style.display="none";
+
+// SWIPE
+let startX=0;
+modal.addEventListener("touchstart",e=>startX=e.touches[0].clientX);
+modal.addEventListener("touchend",e=>{
+  let endX=e.changedTouches[0].clientX;
+  if(endX-startX>50) prevImg();
+  if(startX-endX>50) nextImg();
+});
+
+function nextImg(){currentIndex=(currentIndex+1)%images.length; imgZoom.src=images[currentIndex];}
+function prevImg(){currentIndex=(currentIndex-1+images.length)%images.length; imgZoom.src=images[currentIndex];}
+
+// ZOOM
+let scale=1;
+imgZoom.addEventListener("wheel",e=>{
+  e.preventDefault();
+  scale+=e.deltaY*-0.001;
+  scale=Math.min(Math.max(1,scale),3);
+  imgZoom.style.transform=`scale(${scale})`;
+});
+
+// GUARDAR
+async function guardar(){
+  let name=nameInput.value;
+  let price=priceInput.value.replace(/\./g,"");
+
+  let body={name,price,image:imagenBase64,user,pass};
+
+  if(editId){
+    await fetch(URL+"/"+editId,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    editId=null;
+  }else{
+    await fetch(URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  }
+
+  nameInput.value="";
+  priceInput.value="";
+  preview.src="";
+  imagenBase64="";
+  cargar();
+}
+
+// EDITAR
+function editar(id,name,price,image){
+  editId=id;
+  nameInput.value=name;
+  priceInput.value=new Intl.NumberFormat("es-CO").format(price);
+  imagenBase64=image;
+  preview.src=image;
+  panel.style.display="block";
+}
+
+// ELIMINAR
+async function eliminar(id){
+  await fetch(URL+"/"+id,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({user,pass})});
+  cargar();
+}
+
+cargar();
+</script>
+
+</body>
+</html>
